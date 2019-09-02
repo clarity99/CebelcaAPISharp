@@ -119,5 +119,30 @@ namespace CebelcaAPI
 
         }
 
+        public async Task<string> IssueInvoiceFiscalization(string invoiceId, string idLocation, string opTaxId, string opName,  bool test_mode = false )
+        {
+            Thread.CurrentThread.CurrentCulture = new CultureInfo("sl-SI");
+            var values = new Dictionary<string, string>
+            {
+
+                { "id", invoiceId },
+                { "id_location", idLocation },
+                { "op-tax-id", opTaxId },
+                { "op-name", opName },
+                { "fiscalize", "1" },
+                { "test_mode", test_mode ? "1" : "0" },
+
+            };
+            var ret = await APICall("invoice-sent", "finalize-invoice", values);
+            var json = JArray.Parse(ret);
+            var retname = (json[0][0] as JObject).Properties().First().Name;
+            if (retname != "docnum")
+                throw new Exception("Error from api: " + ret);
+            var id = json[0][0]["docnum"].Value<string>();
+            var eor = json[0][0]["eor"].Value<string>();
+            return id;
+
+        }
+
     }
 }
