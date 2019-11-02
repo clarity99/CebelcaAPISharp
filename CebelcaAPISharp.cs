@@ -55,6 +55,26 @@ namespace CebelcaAPI
 
         }
 
+        public async Task SendInvoiceByEmail(string invoiceId, string to, string subject, string content)
+        {
+            Thread.CurrentThread.CurrentCulture = new CultureInfo("sl-SI");
+            var values = new Dictionary<string, string>
+            {
+                { "id_invoice_sent", invoiceId},
+                { "mto", to},
+                { "msubj", subject },
+                { "docformat", "pdf"},
+                { "doctitle", "Račun št."},
+                { "lang", "si"},
+                { "content", content},
+                { "format", "pdf"}
+            };
+            var ret = await APICall("mailer", "push-invoice-sent-doc", values);
+ 
+        }
+
+
+
         public async Task<string> AddInvoiceLine(string invoiceId,string title, string measuringUnit, string qty, decimal price, string vat, string discount)
         {
             Thread.CurrentThread.CurrentCulture = new CultureInfo("sl-SI");
