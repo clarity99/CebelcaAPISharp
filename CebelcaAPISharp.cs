@@ -193,5 +193,30 @@ namespace CebelcaAPI
 
     }
 
+    public async Task<string> AddPartner(string name, string email, string street, string city, 
+      string postal)
+    {
+      Thread.CurrentThread.CurrentCulture = new CultureInfo("sl-SI");
+      var values = new Dictionary<string, string>
+            {
+
+                { "name", name },
+                { "email", email },
+                { "street", street },
+                { "city", city },
+                { "postal", postal },
+                
+
+            };
+      var ret = await APICall("partner", "assure", values);
+      var json = JArray.Parse(ret);
+      var retname = (json[0][0] as JObject).Properties().First().Name;
+      if (retname != "id")
+        throw new Exception("Error from api: " + ret);
+      var id = json[0][0]["id"].Value<string>();
+      return id;
+
+    }
+
   }
 }
