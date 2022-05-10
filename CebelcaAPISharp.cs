@@ -15,6 +15,15 @@ namespace CebelcaAPI
     public string Id { get; set; }
     public string Name { get; set; }
   }
+
+  public class CebelcaSalesLocation
+  {
+    public string Id { get; set; }
+    public string LocationId { get; set; }
+    public string RegisterId { get; set; }
+  }
+
+
   public class CebelcaAPISharp
   {
     private string _key = "";
@@ -84,6 +93,26 @@ namespace CebelcaAPI
       return l;
     }
 
+    public async Task<IEnumerable<CebelcaSalesLocation>> GetSalesLocations()
+    {
+        var values = new Dictionary<string, string>();
+        var ret = await APICall("sales-location", "select-all", values);
+
+        var json = JArray.Parse(ret);
+        var retname = (json[0][0] as JObject).Properties().First().Name;
+        if (retname != "id")
+            throw new Exception("Error from api: " + ret);
+        var id = json[0][0]["id"].Value<string>();
+        //var l = new List<CebelcaPartner>();
+        var l = json[0].Select(x => new CebelcaSalesLocation
+        {
+            Id = x["id"].Value<string>(),
+            LocationId = x["location_id"].Value<string>(),
+            RegisterId = x["register_id"].Value<string>()
+        }).ToList();
+        return l;
+    }
+
     public async Task SendInvoiceByEmail(string invoiceId, string to, string subject, string content)
     {
       Thread.CurrentThread.CurrentCulture = new CultureInfo("sl-SI");
@@ -101,8 +130,6 @@ namespace CebelcaAPI
       var ret = await APICall("mailer", "push-invoice-sent-doc", values);
 
     }
-
-
 
     public async Task<string> AddInvoiceLine(string invoiceId, string title, string measuringUnit, string qty, decimal price, string vat, string discount)
     {
