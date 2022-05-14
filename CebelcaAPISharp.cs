@@ -21,6 +21,9 @@ namespace CebelcaAPI
     public string Id { get; set; }
     public string LocationId { get; set; }
     public string RegisterId { get; set; }
+    public string Name { get {
+        return $"{LocationId}-{RegisterId}";
+      } }
   }
 
 
@@ -99,7 +102,9 @@ namespace CebelcaAPI
         var ret = await APICall("sales-location", "select-all", values);
 
         var json = JArray.Parse(ret);
-        var retname = (json[0][0] as JObject).Properties().First().Name;
+        if (!json.Any() || !json[0].Any())
+          throw new Exception("Error from api (no data): " + ret);
+      var retname = (json[0][0] as JObject).Properties().First().Name;
         if (retname != "id")
             throw new Exception("Error from api: " + ret);
         var id = json[0][0]["id"].Value<string>();
