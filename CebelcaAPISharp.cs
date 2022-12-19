@@ -40,13 +40,32 @@ namespace CebelcaAPI
       {
         var byteArray = Encoding.ASCII.GetBytes($"{_key}:x");
         client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", Convert.ToBase64String(byteArray));
-        //  var url = "https://www.cebelca.biz/API?_r=invoice-sent&_m=insert-into";
         var url = $"https://www.cebelca.biz/API?_r={region}&_m={method}";
         var content = new FormUrlEncodedContent(postvalues);
         var response = await client.PostAsync(url, content);
 
         var responseString = await response.Content.ReadAsStringAsync();
         return responseString;
+
+      }
+    }
+
+    public async Task<byte[]> GetPDF(string id)
+    {
+      using (var client = new HttpClient())
+      {
+        var byteArray = Encoding.ASCII.GetBytes($"{_key}:x");
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", Convert.ToBase64String(byteArray));
+        var url = $"https://www.cebelca.biz/API-pdf?id={id}&format=pdf&doctitle=Ra%C4%8Dun%20%C5%A1t.&lang=si&res=invoice-sent";
+        var response = await client.GetAsync(url);
+        if (response.IsSuccessStatusCode)
+        {
+          var responseByteArr = await response.Content.ReadAsByteArrayAsync();
+          return responseByteArr;
+        } else
+        {
+          throw new Exception("Cebelca error!");
+        }
 
       }
     }
