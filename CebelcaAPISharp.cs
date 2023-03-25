@@ -96,6 +96,26 @@ namespace CebelcaAPI
 
     }
 
+    public async Task<string> GetNextInvoiceNo()
+    {
+      Thread.CurrentThread.CurrentCulture = new CultureInfo("sl-SI");
+      var values = new Dictionary<string, string>
+            {
+               { "doctype", "0"},
+               { "year", DateTime.Now.Year.ToString() },
+              
+            };
+    
+      var ret = await APICall("invoice-sent", "select-next-title", values);
+      var json = JArray.Parse(ret);
+      var retname = (json[0][0] as JObject).Properties().First().Name;
+      if (retname != "proposed_title")
+        throw new Exception("Error from api: " + ret);
+      var id = json[0][0]["proposed_title"].Value<string>();
+      return id;
+
+    }
+
     public async Task<IEnumerable<CebelcaPartner>> GetPartners()
     {
       var values = new Dictionary<string, string>();
@@ -199,7 +219,7 @@ namespace CebelcaAPI
 
     }
 
-    public async Task<string> IssueInvoiceNoFiscalization(string invoiceId, string docType = "0")
+    public async Task<string> IssueInvoiceNoFiscalization(string invoiceId, string no="", string docType = "0")
     {
       Thread.CurrentThread.CurrentCulture = new CultureInfo("sl-SI");
       var values = new Dictionary<string, string>
@@ -207,7 +227,7 @@ namespace CebelcaAPI
 
                 { "id", invoiceId },
                 { "doctype", docType},
-
+                { "title", no},
             };
       var ret = await APICall("invoice-sent", "finalize-invoice-2015", values);
       var json = JArray.Parse(ret);
@@ -219,7 +239,7 @@ namespace CebelcaAPI
 
     }
 
-    public async Task<string> IssueInvoiceFiscalization(string invoiceId, string idLocation, string opTaxId, string opName, bool test_mode = false)
+    public async Task<string> IssueInvoiceFiscalization(string invoiceId, string idLocation, string opTaxId, string opName, string invoiceNo = "", bool test_mode = false)
     {
       Thread.CurrentThread.CurrentCulture = new CultureInfo("sl-SI");
       var values = new Dictionary<string, string>
@@ -231,6 +251,7 @@ namespace CebelcaAPI
                 { "op-name", opName },
                 { "fiscalize", "1" },
                 { "test_mode", test_mode ? "1" : "0" },
+                 { "title", invoiceNo},
 
             };
       var ret = await APICall("invoice-sent", "finalize-invoice", values);
