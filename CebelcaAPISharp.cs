@@ -26,6 +26,16 @@ namespace CebelcaAPI
       } }
   }
 
+  public class CebInvoice
+  {
+    public string id { get; set; }
+    public string title { get; set; }
+    public DateTime date_served { get; set; }
+    public DateTime date_sent { get; set; }
+    public DateTime date_to_pay { get; set; }
+    public decimal amount { get; set; }
+  }
+
 
   public class CebelcaAPISharp
   {
@@ -113,6 +123,27 @@ namespace CebelcaAPI
         throw new Exception("Error from api: " + ret);
       var id = json[0][0]["proposed_title"].Value<string>();
       return id;
+
+    }
+
+    public async Task<CebInvoice> GetInvoice(int id)
+    {
+      Thread.CurrentThread.CurrentCulture = new CultureInfo("sl-SI");
+      var values = new Dictionary<string, string>
+      {
+          { "id", id.ToString()},
+             
+      };
+
+      var ret = await APICall("invoice-sent", "select-one", values);
+      var json = JArray.Parse(ret);
+      var retname = (json[0][0] as JObject).Properties().First().Name;
+      if (retname != "id")
+        throw new Exception("Error from api: " + ret);
+      var inv = json[0].ToObject<CebInvoice[]>();
+      return inv[0];
+      //var id = json[0][0]["proposed_title"].Value<string>();
+      //return id;
 
     }
 
