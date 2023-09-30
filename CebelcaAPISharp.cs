@@ -4,9 +4,12 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Net.Http;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace CebelcaAPI
 {
@@ -40,9 +43,19 @@ namespace CebelcaAPI
   public class CebelcaAPISharp
   {
     private string _key = "";
-    public CebelcaAPISharp(string key)
+    private readonly ILogger<CebelcaAPISharp> _logger;
+    public CebelcaAPISharp(string key, ILogger<CebelcaAPISharp> logger = null)
     {
       _key = key;
+      if (logger != null)
+      {
+        _logger = logger;
+      }
+      else
+      {
+        _logger = new NullLogger<CebelcaAPISharp>();
+      }
+
     }
     private async Task<string> APICall(string region, string method, Dictionary<string, string> postvalues)
     {
@@ -52,9 +65,11 @@ namespace CebelcaAPI
         client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", Convert.ToBase64String(byteArray));
         var url = $"https://www.cebelca.biz/API?_r={region}&_m={method}";
         var content = new FormUrlEncodedContent(postvalues);
+        _logger.LogInformation("calling {url}. data: {data}", url, content.ToString());
         var response = await client.PostAsync(url, content);
 
         var responseString = await response.Content.ReadAsStringAsync();
+        _logger.LogInformation("response: {response}", responseString);
         return responseString;
 
       }
@@ -216,7 +231,8 @@ namespace CebelcaAPI
                 { "qty",qty },
                 { "id_invoice_sent", invoiceId },
                 { "price", price.ToString() },
-                { "vat", vat }
+                { "vat", vat },
+                { "discount", discount },
             };
       var ret = await APICall("invoice-sent-b", "insert-into", values);
       var json = JArray.Parse(ret);
