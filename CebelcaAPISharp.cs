@@ -65,7 +65,7 @@ namespace CebelcaAPI
         client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", Convert.ToBase64String(byteArray));
         var url = $"https://www.cebelca.biz/API?_r={region}&_m={method}";
         var content = new FormUrlEncodedContent(postvalues);
-        _logger.LogInformation("calling {url}. data: {data}", url, content.ToString());
+        _logger.LogInformation("calling {url}. data: {data}", url, await content.ReadAsStringAsync());
         var response = await client.PostAsync(url, content);
 
         var responseString = await response.Content.ReadAsStringAsync();
@@ -224,13 +224,16 @@ namespace CebelcaAPI
     public async Task<string> AddInvoiceLine(string invoiceId, string title, string measuringUnit, string qty, decimal price, string vat, string discount)
     {
       Thread.CurrentThread.CurrentCulture = new CultureInfo("sl-SI");
+      var cultureInfo = new CultureInfo("sl-SI"); // Slovenian culture
+      var customFormat = "#,0.00;-#,0.00";
+      var priceString = price.ToString(customFormat, cultureInfo);
       var values = new Dictionary<string, string>
             {
                 { "title",title },
                 { "mu",measuringUnit },
                 { "qty",qty },
                 { "id_invoice_sent", invoiceId },
-                { "price", price.ToString() },
+                { "price", priceString },
                 { "vat", vat },
                 { "discount", discount },
             };
