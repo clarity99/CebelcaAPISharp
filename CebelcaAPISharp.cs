@@ -225,7 +225,7 @@ namespace CebelcaAPI
     {
       Thread.CurrentThread.CurrentCulture = new CultureInfo("sl-SI");
       var cultureInfo = new CultureInfo("sl-SI"); // Slovenian culture
-      var customFormat = "#,0.00;-#,0.00";
+      var customFormat = "#,0.00000000;-#,0.00000000";
       var priceString = price.ToString(customFormat, cultureInfo);
       var values = new Dictionary<string, string>
             {
