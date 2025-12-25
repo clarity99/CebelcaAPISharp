@@ -341,3 +341,5 @@ ASALocalRun/
 !.vscode/launch.json
 !.vscode/extensions.json
 
+.github/.DS_Store
+.DS_Store
