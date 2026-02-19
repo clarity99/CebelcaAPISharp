@@ -16,6 +16,3 @@ jobs:
       run: dotnet build --configuration Release
     - name: Pack
       run: dotnet pack --configuration Release --no-build --output ./nupkg
-    - name: Push to nuget.org
-      if: github.ref == 'refs/heads/master'
-      run: dotnet nuget push ./nupkg/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
