@@ -260,6 +260,8 @@ namespace CebelcaAPI
 
             };
       var ret = await APICall("invoice-sent-p", "insert-into", values);
+      if (string.IsNullOrWhiteSpace(ret))
+        throw new Exception("Cebelca API returned empty response for AddPayment");
       var json = JArray.Parse(ret);
       var retname = (json[0][0] as JObject).Properties().First().Name;
       if (retname != "id")
