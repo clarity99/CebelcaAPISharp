@@ -167,26 +167,45 @@ namespace CebelcaAPI
 
     }
 
+    private static string GetOptionalString(JToken token, string fieldName)
+    {
+      return token[fieldName]?.Value<string>();
+    }
+
+    private static string GetRequiredString(JToken token, string fieldName, string fullResponse)
+    {
+      var value = GetOptionalString(token, fieldName);
+      if (string.IsNullOrWhiteSpace(value))
+        throw new Exception($"Error from api: missing or empty '{fieldName}' field. Response: {fullResponse}");
+      return value;
+    }
+
+    private static string FirstNonEmpty(params string[] values)
+    {
+      return values.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x));
+    }
+
     public async Task<IEnumerable<CebelcaPartner>> GetPartners()
     {
       var values = new Dictionary<string, string>();
       var ret = await APICall("partner", "select-all", values);
 
       var json = JArray.Parse(ret);
+      if (!json.Any() || !json[0].Any())
+        throw new Exception("Error from api (no data): " + ret);
       var retname = (json[0][0] as JObject).Properties().First().Name;
       if (retname != "id")
         throw new Exception("Error from api: " + ret);
-      var id = json[0][0]["id"].Value<string>();
-      //var l = new List<CebelcaPartner>();
+
       var l = json[0].Select(x => new CebelcaPartner
       {
-        Id = x["id"]?.Value<string>(),
-        Name = x["name"]?.Value<string>(),
-        Email = x["email"]?.Value<string>(),
-        Street = x["street"]?.Value<string>(),
-        City = x["city"]?.Value<string>(),
-        Postal = x["postal"]?.Value<string>(),
-        TaxNo = x["taxnum"]?.Value<string>() ?? x["tax_no"]?.Value<string>() ?? x["tax_no_si"]?.Value<string>()
+        Id = GetRequiredString(x, "id", ret),
+        Name = GetRequiredString(x, "name", ret),
+        Email = GetOptionalString(x, "email"),
+        Street = GetOptionalString(x, "street"),
+        City = GetOptionalString(x, "city"),
+        Postal = GetOptionalString(x, "postal"),
+        TaxNo = FirstNonEmpty(GetOptionalString(x, "taxnum"), GetOptionalString(x, "tax_no"), GetOptionalString(x, "tax_no_si"))
       }).ToList();
       return l;
     }
