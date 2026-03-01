@@ -17,6 +17,11 @@ namespace CebelcaAPI
   {
     public string Id { get; set; }
     public string Name { get; set; }
+    public string Email { get; set; }
+    public string Street { get; set; }
+    public string City { get; set; }
+    public string Postal { get; set; }
+    public string TaxNo { get; set; }
   }
 
   public class CebelcaSalesLocation
@@ -175,8 +180,13 @@ namespace CebelcaAPI
       //var l = new List<CebelcaPartner>();
       var l = json[0].Select(x => new CebelcaPartner
       {
-        Id = x["id"].Value<string>(),
-        Name = x["name"].Value<string>()
+        Id = x["id"]?.Value<string>(),
+        Name = x["name"]?.Value<string>(),
+        Email = x["email"]?.Value<string>(),
+        Street = x["street"]?.Value<string>(),
+        City = x["city"]?.Value<string>(),
+        Postal = x["postal"]?.Value<string>(),
+        TaxNo = x["taxnum"]?.Value<string>() ?? x["tax_no"]?.Value<string>() ?? x["tax_no_si"]?.Value<string>()
       }).ToList();
       return l;
     }
