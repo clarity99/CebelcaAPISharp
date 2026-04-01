@@ -34,6 +34,20 @@ namespace CebelcaAPI
       } }
   }
 
+  public class CebelcaInvoiceLine
+  {
+    public string Id { get; set; }
+    public string Title { get; set; }
+    public decimal Price { get; set; }
+    public decimal Qty { get; set; }
+    public string Mu { get; set; }
+    public decimal Discount { get; set; }
+    public string Vat { get; set; }
+    public string Konto { get; set; }
+    public string TaxType { get; set; }
+    public string IdInvoiceSent { get; set; }
+  }
+
   public class CebInvoice
   {
     public string id { get; set; }
@@ -274,6 +288,61 @@ namespace CebelcaAPI
       var id = json[0][0]["id"].Value<string>();
       return id;
 
+    }
+
+    public async Task<IEnumerable<CebelcaInvoiceLine>> GetInvoiceLines(string invoiceId)
+    {
+      Thread.CurrentThread.CurrentCulture = new CultureInfo("sl-SI");
+      var values = new Dictionary<string, string>
+            {
+                { "id_invoice_sent", invoiceId },
+            };
+      var ret = await APICall("invoice-sent-b", "select-of-more", values);
+      var json = JArray.Parse(ret);
+      if (!json.Any() || !json[0].Any())
+        return Enumerable.Empty<CebelcaInvoiceLine>();
+      var retname = (json[0][0] as JObject).Properties().First().Name;
+      if (retname != "id")
+        throw new Exception("Error from api: " + ret);
+      return json[0].Select(x => new CebelcaInvoiceLine
+      {
+        Id = x["id"]?.Value<string>(),
+        Title = x["title"]?.Value<string>(),
+        Price = x["price"]?.Value<decimal>() ?? 0,
+        Qty = x["qty"]?.Value<decimal>() ?? 0,
+        Mu = x["mu"]?.Value<string>(),
+        Discount = x["discount"]?.Value<decimal>() ?? 0,
+        Vat = x["vat"]?.Value<string>(),
+        Konto = x["konto"]?.Value<string>(),
+        TaxType = x["tax_type"]?.Value<string>(),
+        IdInvoiceSent = invoiceId,
+      }).ToList();
+    }
+
+    public async Task UpdateInvoiceLine(string lineId, string invoiceId, string title, string measuringUnit, string qty, decimal price, string vat, string discount, string taxType = "EXM", string konto = "")
+    {
+      Thread.CurrentThread.CurrentCulture = new CultureInfo("sl-SI");
+      var cultureInfo = new CultureInfo("sl-SI");
+      var customFormat = "#,0.00000000;-#,0.00000000";
+      var priceString = price.ToString(customFormat, cultureInfo);
+      var values = new Dictionary<string, string>
+            {
+                { "id", lineId },
+                { "title", title },
+                { "price", priceString },
+                { "qty", qty },
+                { "mu", measuringUnit },
+                { "discount", discount },
+                { "konto", konto },
+                { "vat", vat },
+                { "id_invoice_sent", invoiceId },
+                { "tax_type", taxType },
+            };
+      var ret = await APICall("invoice-sent-b", "update", values);
+      var json = JArray.Parse(ret);
+      var retname = (json[0][0] as JObject).Properties().First().Name;
+      if (retname != "id")
+        throw new Exception("Error from api: " + ret);
     }
 
     public async Task<string> AddPayment(string invoiceId, DateTime dateOfPayment, decimal amount, string paymentMethod)
