@@ -59,7 +59,25 @@ namespace CebelcaAPI
   }
 
 
-  public class CebelcaAPISharp
+  public interface ICebelcaAPISharp
+  {
+    Task<byte[]> GetPDF(string id);
+    Task<string> AddInvoiceHead(string partnerId, string idDocumentExt, DateTime dateSent, DateTime dateServed, DateTime dateToPay, bool paid = false);
+    Task<string> GetNextInvoiceNo();
+    Task<CebInvoice> GetInvoice(int id);
+    Task<IEnumerable<CebelcaPartner>> GetPartners();
+    Task<IEnumerable<CebelcaSalesLocation>> GetSalesLocations();
+    Task SendInvoiceByEmail(string invoiceId, string to, string subject, string content);
+    Task<string> AddInvoiceLine(string invoiceId, string title, string measuringUnit, string qty, decimal price, string vat, string discount);
+    Task<IEnumerable<CebelcaInvoiceLine>> GetInvoiceLines(string invoiceId);
+    Task UpdateInvoiceLine(string lineId, string invoiceId, string title, string measuringUnit, string qty, decimal price, string vat, string discount, string taxType = "EXM", string konto = "");
+    Task<string> AddPayment(string invoiceId, DateTime dateOfPayment, decimal amount, string paymentMethod);
+    Task<string> IssueInvoiceNoFiscalization(string invoiceId, string no = "", string docType = "0");
+    Task<string> IssueInvoiceFiscalization(string invoiceId, string idLocation, string opTaxId, string opName, string invoiceNo = "", bool test_mode = false);
+    Task<string> AddPartner(string name, string email, string street, string city, string postal);
+  }
+
+  public class CebelcaAPISharp : ICebelcaAPISharp
   {
     private string _key = "";
     private readonly ILogger<CebelcaAPISharp> _logger;
