@@ -321,10 +321,7 @@ namespace CebelcaAPI
 
     public async Task UpdateInvoiceLine(string lineId, string invoiceId, string title, string measuringUnit, string qty, decimal price, string vat, string discount, string taxType = "EXM", string konto = "")
     {
-      Thread.CurrentThread.CurrentCulture = new CultureInfo("sl-SI");
-      var cultureInfo = new CultureInfo("sl-SI");
-      var customFormat = "#,0.00000000;-#,0.00000000";
-      var priceString = price.ToString(customFormat, cultureInfo);
+      var priceString = price.ToString("G", CultureInfo.InvariantCulture);
       var values = new Dictionary<string, string>
             {
                 { "id", lineId },
