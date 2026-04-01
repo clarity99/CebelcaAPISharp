@@ -105,9 +105,10 @@ namespace CebelcaAPI
         var content = new FormUrlEncodedContent(postvalues);
         _logger.LogInformation("calling {url}. data: {data}", url, await content.ReadAsStringAsync());
         var response = await client.PostAsync(url, content);
-
+        
         var responseString = await response.Content.ReadAsStringAsync();
         _logger.LogInformation("response: {response}", responseString);
+        response.EnsureSuccessStatusCode();
         return responseString;
 
       }
