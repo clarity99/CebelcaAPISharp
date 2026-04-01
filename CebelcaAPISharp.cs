@@ -339,7 +339,9 @@ namespace CebelcaAPI
                 { "tax_type", taxType },
             };
       var ret = await APICall("invoice-sent-b", "update", values);
-      if (!int.TryParse(ret.Trim(), out var affected) || affected == 0)
+      var json = JArray.Parse(ret);
+      var retname = (json[0][0] as JObject).Properties().First().Name;
+      if (retname != "id")
         throw new Exception("Error from api: " + ret);
     }
 
