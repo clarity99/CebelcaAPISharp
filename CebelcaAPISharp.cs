@@ -338,8 +338,11 @@ namespace CebelcaAPI
                 { "id_invoice_sent", invoiceId },
                 { "tax_type", taxType },
             };
+      Console.WriteLine("UpdateInvoiceLine request: " + string.Join("&", values.Select(kv => $"{kv.Key}={kv.Value}")));
       var ret = await APICall("invoice-sent-b", "update", values);
       Console.WriteLine("UpdateInvoiceLine response: " + ret);
+      if (!ret.TrimStart().StartsWith("["))
+        throw new Exception("Error from api: " + ret);
       var json = JArray.Parse(ret);
       var retname = (json[0][0] as JObject).Properties().First().Name;
       if (retname != "id")
