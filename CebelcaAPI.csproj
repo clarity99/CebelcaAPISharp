@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
     <PackageId>CebelcaAPISharp</PackageId>
-    <Version>1.0.4</Version>
+    <Version>1.0.5</Version>
     <Authors>CebelcaAPISharp Contributors</Authors>
     <Description>A simple library for Cebelca.biz (InvoiceFox) API.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
