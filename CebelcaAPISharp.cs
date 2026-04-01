@@ -77,6 +77,19 @@ namespace CebelcaAPI
     Task<string> AddPartner(string name, string email, string street, string city, string postal);
   }
 
+  public interface ICebelcaClientFactory                                                                                          
+  {                                                                                                                               
+    ICebelcaAPISharp Create(string apiKey);                                                                                     
+  }                                                                                                                               
+                                                                                                                                 
+  public class CebelcaClientFactory : ICebelcaClientFactory                                                                       
+  {                                                                                                                               
+    private readonly ILoggerFactory _loggerFactory;                                                                             
+    public CebelcaClientFactory(ILoggerFactory loggerFactory) => _loggerFactory = loggerFactory;                                
+    public ICebelcaAPISharp Create(string apiKey) =>                                                                            
+      new CebelcaAPISharp(apiKey, _loggerFactory.CreateLogger<CebelcaAPISharp>());                                            
+  }  
+  
   public class CebelcaAPISharp : ICebelcaAPISharp
   {
     private string _key = "";
