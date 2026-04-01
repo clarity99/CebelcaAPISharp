@@ -76,13 +76,14 @@ namespace CebelcaAPI
       }
 
     }
-    private async Task<string> APICall(string region, string method, Dictionary<string, string> postvalues)
+    private async Task<string> APICall(string region, string method, Dictionary<string, string> postvalues, string method2 = null)
     {
       using (var client = new HttpClient())
       {
         var byteArray = Encoding.ASCII.GetBytes($"{_key}:x");
         client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", Convert.ToBase64String(byteArray));
         var url = $"https://www.cebelca.biz/API?_r={region}&_m={method}";
+        if (method2 != null) url += $"&_m2={method2}";
         var content = new FormUrlEncodedContent(postvalues);
         _logger.LogInformation("calling {url}. data: {data}", url, await content.ReadAsStringAsync());
         var response = await client.PostAsync(url, content);
@@ -336,7 +337,7 @@ namespace CebelcaAPI
                 { "tax_type", taxType },
             };
       Console.WriteLine("UpdateInvoiceLine request: " + string.Join("&", values.Select(kv => $"{kv.Key}={kv.Value}")));
-      var ret = await APICall("invoice-sent-b", "update", values);
+      var ret = await APICall("invoice-sent-b", "update", values, "select-of-more");
       Console.WriteLine("UpdateInvoiceLine response: " + ret);
       if (!ret.TrimStart().StartsWith("["))
         throw new Exception("Error from api: " + ret);
