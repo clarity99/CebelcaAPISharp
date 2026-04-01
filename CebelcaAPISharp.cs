@@ -84,6 +84,7 @@ namespace CebelcaAPI
         client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", Convert.ToBase64String(byteArray));
         var url = $"https://www.cebelca.biz/API?_r={region}&_m={method}";
         if (method2 != null) url += $"&_m2={method2}";
+        Console.WriteLine("APICall URL: " + url);
         var content = new FormUrlEncodedContent(postvalues);
         _logger.LogInformation("calling {url}. data: {data}", url, await content.ReadAsStringAsync());
         var response = await client.PostAsync(url, content);
