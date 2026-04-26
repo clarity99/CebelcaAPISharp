@@ -58,6 +58,15 @@ namespace CebelcaAPI
     public decimal amount { get; set; }
   }
 
+  public class CebelcaPayment
+  {
+    public string Id { get; set; }
+    public string InvoiceId { get; set; }
+    public DateTime DateOfPayment { get; set; }
+    public decimal Amount { get; set; }
+    public int PaymentMethodId { get; set; }
+  }
+
 
   public interface ICebelcaAPISharp
   {
@@ -72,6 +81,7 @@ namespace CebelcaAPI
     Task<IEnumerable<CebelcaInvoiceLine>> GetInvoiceLines(string invoiceId);
     Task UpdateInvoiceLine(string lineId, string invoiceId, string title, string measuringUnit, string qty, decimal price, string vat, string discount, string taxType = "EXM", string konto = "");
     Task<string> AddPayment(string invoiceId, DateTime dateOfPayment, decimal amount, string paymentMethod);
+    Task<IEnumerable<CebelcaPayment>> GetPayments(string invoiceId);
     Task<string> IssueInvoiceNoFiscalization(string invoiceId, string no = "", string docType = "0");
     Task<string> IssueInvoiceFiscalization(string invoiceId, string idLocation, string opTaxId, string opName, string invoiceNo = "", bool test_mode = false);
     Task<string> AddPartner(string name, string email, string street, string city, string postal);
@@ -399,6 +409,30 @@ namespace CebelcaAPI
       var id = json[0][0]["id"].Value<string>();
       return id;
 
+    }
+
+    public async Task<IEnumerable<CebelcaPayment>> GetPayments(string invoiceId)
+    {
+      Thread.CurrentThread.CurrentCulture = new CultureInfo("sl-SI");
+      var values = new Dictionary<string, string>
+            {
+                { "id_invoice_sent", invoiceId },
+            };
+      var ret = await APICall("invoice-sent-p", "select-of-more", values);
+      var json = JArray.Parse(ret);
+      if (!json.Any() || !json[0].Any())
+        return Enumerable.Empty<CebelcaPayment>();
+      var retname = (json[0][0] as JObject).Properties().First().Name;
+      if (retname != "id")
+        throw new Exception("Error from api: " + ret);
+      return json[0].Select(x => new CebelcaPayment
+      {
+        Id = x["id"]?.Value<string>(),
+        InvoiceId = x["id_invoice_sent"]?.Value<string>(),
+        DateOfPayment = x["date_of"]?.Value<DateTime>() ?? default,
+        Amount = x["amount"]?.Value<decimal>() ?? 0,
+        PaymentMethodId = x["id_payment_method"]?.Value<int>() ?? 0,
+      }).ToList();
     }
 
     public async Task<string> IssueInvoiceNoFiscalization(string invoiceId, string no="", string docType = "0")
