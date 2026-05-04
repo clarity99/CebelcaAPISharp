@@ -56,6 +56,7 @@ namespace CebelcaAPI
     public DateTime date_sent { get; set; }
     public DateTime date_to_pay { get; set; }
     public decimal amount { get; set; }
+    public string id_document_ext { get; set; }
   }
 
   public class CebelcaPayment
@@ -71,7 +72,7 @@ namespace CebelcaAPI
   public interface ICebelcaAPISharp
   {
     Task<byte[]> GetPDF(string id);
-    Task<string> AddInvoiceHead(string partnerId, string idDocumentExt, DateTime dateSent, DateTime dateServed, DateTime dateToPay, bool paid = false);
+    Task<string> AddInvoiceHead(string partnerId, string idDocumentExt, DateTime dateSent, DateTime dateServed, DateTime dateToPay, bool paid = false, string docType = "0");
     Task<string> GetNextInvoiceNo();
     Task<CebInvoice> GetInvoice(int id);
     Task<IEnumerable<CebelcaPartner>> GetPartners();
@@ -83,8 +84,9 @@ namespace CebelcaAPI
     Task<string> AddPayment(string invoiceId, DateTime dateOfPayment, decimal amount, string paymentMethod);
     Task<IEnumerable<CebelcaPayment>> GetPayments(string invoiceId);
     Task<string> IssueInvoiceNoFiscalization(string invoiceId, string no = "", string docType = "0");
-    Task<string> IssueInvoiceFiscalization(string invoiceId, string idLocation, string opTaxId, string opName, string invoiceNo = "", bool test_mode = false);
+    Task<string> IssueInvoiceFiscalization(string invoiceId, string idLocation, string opTaxId, string opName, string invoiceNo = "", bool test_mode = false, string docType = "0");
     Task<string> AddPartner(string name, string email, string street, string city, string postal);
+    Task<IEnumerable<CebInvoice>> GetInvoicesForPartner(string partnerId);
   }
 
   public interface ICebelcaClientFactory                                                                                          
@@ -157,7 +159,7 @@ namespace CebelcaAPI
       }
     }
 
-    public async Task<string> AddInvoiceHead(string partnerId, string idDocumentExt, DateTime dateSent, DateTime dateServed, DateTime dateToPay, bool paid = false)
+    public async Task<string> AddInvoiceHead(string partnerId, string idDocumentExt, DateTime dateSent, DateTime dateServed, DateTime dateToPay, bool paid = false, string docType = "0")
     {
       Thread.CurrentThread.CurrentCulture = new CultureInfo("sl-SI");
       var values = new Dictionary<string, string>
@@ -166,7 +168,8 @@ namespace CebelcaAPI
                 { "date_served",dateServed.ToShortDateString() },
                 { "date_to_pay", dateToPay.ToShortDateString()  },
                 { "id_partner", partnerId },
-                { "id_document_ext", idDocumentExt }
+                { "id_document_ext", idDocumentExt },
+                { "doctype", docType }
             };
       if (paid)
       {
@@ -455,7 +458,7 @@ namespace CebelcaAPI
 
     }
 
-    public async Task<string> IssueInvoiceFiscalization(string invoiceId, string idLocation, string opTaxId, string opName, string invoiceNo = "", bool test_mode = false)
+    public async Task<string> IssueInvoiceFiscalization(string invoiceId, string idLocation, string opTaxId, string opName, string invoiceNo = "", bool test_mode = false, string docType = "0")
     {
       Thread.CurrentThread.CurrentCulture = new CultureInfo("sl-SI");
       var values = new Dictionary<string, string>
@@ -467,7 +470,8 @@ namespace CebelcaAPI
                 { "op-name", opName },
                 { "fiscalize", "1" },
                 { "test_mode", test_mode ? "1" : "0" },
-                 { "title", invoiceNo},
+                { "title", invoiceNo},
+                { "doctype", docType },
 
             };
       var ret = await APICall("invoice-sent", "finalize-invoice", values);
@@ -481,7 +485,33 @@ namespace CebelcaAPI
 
     }
 
-    public async Task<string> AddPartner(string name, string email, string street, string city, 
+    public async Task<IEnumerable<CebInvoice>> GetInvoicesForPartner(string partnerId)
+    {
+      Thread.CurrentThread.CurrentCulture = new CultureInfo("sl-SI");
+      var values = new Dictionary<string, string>
+      {
+          { "id_partner", partnerId },
+      };
+      var ret = await APICall("invoice-sent", "select-by-partner", values);
+      var json = JArray.Parse(ret);
+      if (!json.Any() || !json[0].Any())
+        return Enumerable.Empty<CebInvoice>();
+      var retname = (json[0][0] as JObject).Properties().First().Name;
+      if (retname != "id")
+        throw new Exception("Error from api: " + ret);
+      return json[0].Select(x => new CebInvoice
+      {
+        id = x["id"]?.Value<string>(),
+        title = x["title"]?.Value<string>(),
+        date_served = x["date_served"]?.Value<DateTime>() ?? default,
+        date_sent = x["date_sent"]?.Value<DateTime>() ?? default,
+        date_to_pay = x["date_to_pay"]?.Value<DateTime>() ?? default,
+        amount = x["amount"]?.Value<decimal>() ?? 0,
+        id_document_ext = x["id_document_ext"]?.Value<string>(),
+      }).ToList();
+    }
+
+    public async Task<string> AddPartner(string name, string email, string street, string city,
       string postal)
     {
       Thread.CurrentThread.CurrentCulture = new CultureInfo("sl-SI");
