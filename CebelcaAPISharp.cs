@@ -56,7 +56,7 @@ namespace CebelcaAPI
     public DateTime date_sent { get; set; }
     public DateTime date_to_pay { get; set; }
     public decimal amount { get; set; }
-    public string id_document_ext { get; set; }
+    public string id_partner { get; set; }
   }
 
   public class CebelcaPayment
@@ -86,7 +86,7 @@ namespace CebelcaAPI
     Task<string> IssueInvoiceNoFiscalization(string invoiceId, string no = "", string docType = "0");
     Task<string> IssueInvoiceFiscalization(string invoiceId, string idLocation, string opTaxId, string opName, string invoiceNo = "", bool test_mode = false, string docType = "0");
     Task<string> AddPartner(string name, string email, string street, string city, string postal);
-    Task<IEnumerable<CebInvoice>> GetInvoicesForPartner(string partnerId);
+    Task<IEnumerable<CebInvoice>> GetAllInvoices();
   }
 
   public interface ICebelcaClientFactory                                                                                          
@@ -485,30 +485,43 @@ namespace CebelcaAPI
 
     }
 
-    public async Task<IEnumerable<CebInvoice>> GetInvoicesForPartner(string partnerId)
+    public async Task<IEnumerable<CebInvoice>> GetAllInvoices()
     {
       Thread.CurrentThread.CurrentCulture = new CultureInfo("sl-SI");
-      var values = new Dictionary<string, string>
+      var all = new List<CebInvoice>();
+      for (int page = 0; page < 1000; page++)
       {
-          { "id_partner", partnerId },
-      };
-      var ret = await APICall("invoice-sent", "select-by-partner", values);
-      var json = JArray.Parse(ret);
-      if (!json.Any() || !json[0].Any())
-        return Enumerable.Empty<CebInvoice>();
-      var retname = (json[0][0] as JObject).Properties().First().Name;
-      if (retname != "id")
-        throw new Exception("Error from api: " + ret);
-      return json[0].Select(x => new CebInvoice
-      {
-        id = x["id"]?.Value<string>(),
-        title = x["title"]?.Value<string>(),
-        date_served = x["date_served"]?.Value<DateTime>() ?? default,
-        date_sent = x["date_sent"]?.Value<DateTime>() ?? default,
-        date_to_pay = x["date_to_pay"]?.Value<DateTime>() ?? default,
-        amount = x["amount"]?.Value<decimal>() ?? 0,
-        id_document_ext = x["id_document_ext"]?.Value<string>(),
-      }).ToList();
+        var values = new Dictionary<string, string>
+        {
+          { "filter", "all" },
+          { "company", "0" },
+          { "page", page.ToString() },
+          { "doctype", "-999" },
+          { "datefrom", "" },
+          { "dateto", "" },
+        };
+        var ret = await APICall("invoice-sent", "select-all-by", values);
+        var json = JArray.Parse(ret);
+        if (!json.Any() || !json[0].Any())
+          break;
+        var retname = (json[0][0] as JObject).Properties().First().Name;
+        if (retname != "id")
+          throw new Exception("Error from api: " + ret);
+        var batch = json[0].Select(x => new CebInvoice
+        {
+          id = x["id"]?.Value<string>(),
+          title = x["title"]?.Value<string>(),
+          date_served = x["date_served"]?.Value<DateTime>() ?? default,
+          date_sent = x["date_sent"]?.Value<DateTime>() ?? default,
+          date_to_pay = x["date_to_pay"]?.Value<DateTime>() ?? default,
+          amount = x["amount"]?.Value<decimal>() ?? 0,
+          id_partner = x["id_partner"]?.Value<string>(),
+        }).ToList();
+        if (batch.Count == 0)
+          break;
+        all.AddRange(batch);
+      }
+      return all;
     }
 
     public async Task<string> AddPartner(string name, string email, string street, string city,
