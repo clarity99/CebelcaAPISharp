@@ -485,6 +485,13 @@ namespace CebelcaAPI
 
     }
 
+    private static DateTime SafeParseDate(JToken token, string fieldName)
+    {
+      var raw = token[fieldName]?.Value<string>();
+      if (string.IsNullOrWhiteSpace(raw)) return default;
+      return DateTime.TryParse(raw, out var result) ? result : default;
+    }
+
     public async Task<IEnumerable<CebInvoice>> GetAllInvoices()
     {
       Thread.CurrentThread.CurrentCulture = new CultureInfo("sl-SI");
@@ -511,9 +518,9 @@ namespace CebelcaAPI
         {
           id = x["id"]?.Value<string>(),
           title = x["title"]?.Value<string>(),
-          date_served = x["date_served"]?.Value<DateTime>() ?? default,
-          date_sent = x["date_sent"]?.Value<DateTime>() ?? default,
-          date_to_pay = x["date_to_pay"]?.Value<DateTime>() ?? default,
+          date_served = SafeParseDate(x, "date_served"),
+          date_sent = SafeParseDate(x, "date_sent"),
+          date_to_pay = SafeParseDate(x, "date_to_pay"),
           amount = x["amount"]?.Value<decimal>() ?? 0,
           id_partner = x["id_partner"]?.Value<string>(),
         }).ToList();
