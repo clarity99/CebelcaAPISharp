@@ -521,7 +521,7 @@ namespace CebelcaAPI
           date_served = SafeParseDate(x, "date_served"),
           date_sent = SafeParseDate(x, "date_sent"),
           date_to_pay = SafeParseDate(x, "date_to_pay"),
-          amount = x["amount"]?.Value<decimal>() ?? 0,
+          amount = x["amount"]?.ToObject<decimal?>() ?? 0,
           id_partner = x["id_partner"]?.Value<string>(),
         }).ToList();
         if (batch.Count == 0)
