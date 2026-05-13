@@ -1,9 +1,10 @@
-<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk" TreatAsLocalProperty="PublishTrimmed">
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
+    <PublishTrimmed>false</PublishTrimmed>
     <PackageId>CebelcaAPISharp</PackageId>
-    <Version>1.0.2</Version>
+    <Version>1.0.9</Version>
     <Authors>CebelcaAPISharp Contributors</Authors>
     <Description>A simple library for Cebelca.biz (InvoiceFox) API.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
