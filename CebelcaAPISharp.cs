@@ -17,6 +17,11 @@ namespace CebelcaAPI
   {
     public string Id { get; set; }
     public string Name { get; set; }
+    public string Email { get; set; }
+    public string Street { get; set; }
+    public string City { get; set; }
+    public string Postal { get; set; }
+    public string TaxNo { get; set; }
   }
 
   public class CebelcaSalesLocation
@@ -29,6 +34,20 @@ namespace CebelcaAPI
       } }
   }
 
+  public class CebelcaInvoiceLine
+  {
+    public string Id { get; set; }
+    public string Title { get; set; }
+    public decimal Price { get; set; }
+    public decimal Qty { get; set; }
+    public string Mu { get; set; }
+    public decimal Discount { get; set; }
+    public string Vat { get; set; }
+    public string Konto { get; set; }
+    public string TaxType { get; set; }
+    public string IdInvoiceSent { get; set; }
+  }
+
   public class CebInvoice
   {
     public string id { get; set; }
@@ -37,10 +56,53 @@ namespace CebelcaAPI
     public DateTime date_sent { get; set; }
     public DateTime date_to_pay { get; set; }
     public decimal amount { get; set; }
+    public string id_partner { get; set; }
+  }
+
+  public class CebelcaPayment
+  {
+    public string Id { get; set; }
+    public string InvoiceId { get; set; }
+    public DateTime DateOfPayment { get; set; }
+    public decimal Amount { get; set; }
+    public int PaymentMethodId { get; set; }
   }
 
 
-  public class CebelcaAPISharp
+  public interface ICebelcaAPISharp
+  {
+    Task<byte[]> GetPDF(string id);
+    Task<string> AddInvoiceHead(string partnerId, string idDocumentExt, DateTime dateSent, DateTime dateServed, DateTime dateToPay, bool paid = false, string docType = "0");
+    Task<string> GetNextInvoiceNo();
+    Task<CebInvoice> GetInvoice(int id);
+    Task<IEnumerable<CebelcaPartner>> GetPartners();
+    Task<IEnumerable<CebelcaSalesLocation>> GetSalesLocations();
+    Task SendInvoiceByEmail(string invoiceId, string to, string subject, string content);
+    Task<string> AddInvoiceLine(string invoiceId, string title, string measuringUnit, string qty, decimal price, string vat, string discount);
+    Task<IEnumerable<CebelcaInvoiceLine>> GetInvoiceLines(string invoiceId);
+    Task UpdateInvoiceLine(string lineId, string invoiceId, string title, string measuringUnit, string qty, decimal price, string vat, string discount, string taxType = "EXM", string konto = "");
+    Task<string> AddPayment(string invoiceId, DateTime dateOfPayment, decimal amount, string paymentMethod);
+    Task<IEnumerable<CebelcaPayment>> GetPayments(string invoiceId);
+    Task<string> IssueInvoiceNoFiscalization(string invoiceId, string no = "", string docType = "0");
+    Task<string> IssueInvoiceFiscalization(string invoiceId, string idLocation, string opTaxId, string opName, string invoiceNo = "", bool test_mode = false, string docType = "0");
+    Task<string> AddPartner(string name, string email, string street, string city, string postal);
+    Task<IEnumerable<CebInvoice>> GetAllInvoices();
+  }
+
+  public interface ICebelcaClientFactory                                                                                          
+  {                                                                                                                               
+    ICebelcaAPISharp Create(string apiKey);                                                                                     
+  }                                                                                                                               
+                                                                                                                                 
+  public class CebelcaClientFactory : ICebelcaClientFactory                                                                       
+  {                                                                                                                               
+    private readonly ILoggerFactory _loggerFactory;                                                                             
+    public CebelcaClientFactory(ILoggerFactory loggerFactory) => _loggerFactory = loggerFactory;                                
+    public ICebelcaAPISharp Create(string apiKey) =>                                                                            
+      new CebelcaAPISharp(apiKey, _loggerFactory.CreateLogger<CebelcaAPISharp>());                                            
+  }  
+  
+  public class CebelcaAPISharp : ICebelcaAPISharp
   {
     private string _key = "";
     private readonly ILogger<CebelcaAPISharp> _logger;
@@ -57,19 +119,21 @@ namespace CebelcaAPI
       }
 
     }
-    private async Task<string> APICall(string region, string method, Dictionary<string, string> postvalues)
+    private async Task<string> APICall(string region, string method, Dictionary<string, string> postvalues, string method2 = null)
     {
       using (var client = new HttpClient())
       {
         var byteArray = Encoding.ASCII.GetBytes($"{_key}:x");
         client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", Convert.ToBase64String(byteArray));
         var url = $"https://www.cebelca.biz/API?_r={region}&_m={method}";
+        if (method2 != null) url += $"&_m2={method2}";
         var content = new FormUrlEncodedContent(postvalues);
         _logger.LogInformation("calling {url}. data: {data}", url, await content.ReadAsStringAsync());
         var response = await client.PostAsync(url, content);
-
+        
         var responseString = await response.Content.ReadAsStringAsync();
         _logger.LogInformation("response: {response}", responseString);
+        response.EnsureSuccessStatusCode();
         return responseString;
 
       }
@@ -95,7 +159,7 @@ namespace CebelcaAPI
       }
     }
 
-    public async Task<string> AddInvoiceHead(string partnerId, string idDocumentExt, DateTime dateSent, DateTime dateServed, DateTime dateToPay, bool paid = false)
+    public async Task<string> AddInvoiceHead(string partnerId, string idDocumentExt, DateTime dateSent, DateTime dateServed, DateTime dateToPay, bool paid = false, string docType = "0")
     {
       Thread.CurrentThread.CurrentCulture = new CultureInfo("sl-SI");
       var values = new Dictionary<string, string>
@@ -104,7 +168,8 @@ namespace CebelcaAPI
                 { "date_served",dateServed.ToShortDateString() },
                 { "date_to_pay", dateToPay.ToShortDateString()  },
                 { "id_partner", partnerId },
-                { "id_document_ext", idDocumentExt }
+                { "id_document_ext", idDocumentExt },
+                { "doctype", docType }
             };
       if (paid)
       {
@@ -162,21 +227,45 @@ namespace CebelcaAPI
 
     }
 
+    private static string GetOptionalString(JToken token, string fieldName)
+    {
+      return token[fieldName]?.Value<string>();
+    }
+
+    private static string GetRequiredString(JToken token, string fieldName, string fullResponse)
+    {
+      var value = GetOptionalString(token, fieldName);
+      if (string.IsNullOrWhiteSpace(value))
+        throw new Exception($"Error from api: missing or empty '{fieldName}' field. Response: {fullResponse}");
+      return value;
+    }
+
+    private static string FirstNonEmpty(params string[] values)
+    {
+      return values.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x));
+    }
+
     public async Task<IEnumerable<CebelcaPartner>> GetPartners()
     {
       var values = new Dictionary<string, string>();
       var ret = await APICall("partner", "select-all", values);
 
       var json = JArray.Parse(ret);
+      if (!json.Any() || !json[0].Any())
+        throw new Exception("Error from api (no data): " + ret);
       var retname = (json[0][0] as JObject).Properties().First().Name;
       if (retname != "id")
         throw new Exception("Error from api: " + ret);
-      var id = json[0][0]["id"].Value<string>();
-      //var l = new List<CebelcaPartner>();
+
       var l = json[0].Select(x => new CebelcaPartner
       {
-        Id = x["id"].Value<string>(),
-        Name = x["name"].Value<string>()
+        Id = GetRequiredString(x, "id", ret),
+        Name = GetRequiredString(x, "name", ret),
+        Email = GetOptionalString(x, "email"),
+        Street = GetOptionalString(x, "street"),
+        City = GetOptionalString(x, "city"),
+        Postal = GetOptionalString(x, "postal"),
+        TaxNo = FirstNonEmpty(GetOptionalString(x, "taxnum"), GetOptionalString(x, "tax_no"), GetOptionalString(x, "tax_no_si"))
       }).ToList();
       return l;
     }
@@ -247,6 +336,60 @@ namespace CebelcaAPI
 
     }
 
+    public async Task<IEnumerable<CebelcaInvoiceLine>> GetInvoiceLines(string invoiceId)
+    {
+      Thread.CurrentThread.CurrentCulture = new CultureInfo("sl-SI");
+      var values = new Dictionary<string, string>
+            {
+                { "id_invoice_sent", invoiceId },
+            };
+      var ret = await APICall("invoice-sent-b", "select-of-more", values);
+      var json = JArray.Parse(ret);
+      if (!json.Any() || !json[0].Any())
+        return Enumerable.Empty<CebelcaInvoiceLine>();
+      var retname = (json[0][0] as JObject).Properties().First().Name;
+      if (retname != "id")
+        throw new Exception("Error from api: " + ret);
+      return json[0].Select(x => new CebelcaInvoiceLine
+      {
+        Id = x["id"]?.Value<string>(),
+        Title = x["title"]?.Value<string>(),
+        Price = x["price"]?.Value<decimal>() ?? 0,
+        Qty = x["qty"]?.Value<decimal>() ?? 0,
+        Mu = x["mu"]?.Value<string>(),
+        Discount = x["discount"]?.Value<decimal>() ?? 0,
+        Vat = x["vat"]?.Value<string>(),
+        Konto = x["konto"]?.Value<string>(),
+        TaxType = x["tax_type"]?.Value<string>(),
+        IdInvoiceSent = invoiceId,
+      }).ToList();
+    }
+
+    public async Task UpdateInvoiceLine(string lineId, string invoiceId, string title, string measuringUnit, string qty, decimal price, string vat, string discount, string taxType = "EXM", string konto = "")
+    {
+      var priceString = price.ToString("G", CultureInfo.InvariantCulture);
+      var values = new Dictionary<string, string>
+            {
+                { "id", lineId },
+                { "title", title },
+                { "price", priceString },
+                { "qty", qty },
+                { "mu", measuringUnit },
+                { "discount", discount },
+                { "konto", konto },
+                { "vat", vat },
+                { "id_invoice_sent", invoiceId },
+                { "tax_type", taxType },
+            };
+      var ret = await APICall("invoice-sent-b", "update", values, "select-of-more");
+      if (!ret.TrimStart().StartsWith("["))
+        throw new Exception("Error from api: " + ret);
+      var json = JArray.Parse(ret);
+      var retname = (json[0][0] as JObject).Properties().First().Name;
+      if (retname != "id")
+        throw new Exception("Error from api: " + ret);
+    }
+
     public async Task<string> AddPayment(string invoiceId, DateTime dateOfPayment, decimal amount, string paymentMethod)
     {
       Thread.CurrentThread.CurrentCulture = new CultureInfo("sl-SI");
@@ -271,6 +414,30 @@ namespace CebelcaAPI
 
     }
 
+    public async Task<IEnumerable<CebelcaPayment>> GetPayments(string invoiceId)
+    {
+      Thread.CurrentThread.CurrentCulture = new CultureInfo("sl-SI");
+      var values = new Dictionary<string, string>
+            {
+                { "id_invoice_sent", invoiceId },
+            };
+      var ret = await APICall("invoice-sent-p", "select-of-more", values);
+      var json = JArray.Parse(ret);
+      if (!json.Any() || !json[0].Any())
+        return Enumerable.Empty<CebelcaPayment>();
+      var retname = (json[0][0] as JObject).Properties().First().Name;
+      if (retname != "id")
+        throw new Exception("Error from api: " + ret);
+      return json[0].Select(x => new CebelcaPayment
+      {
+        Id = x["id"]?.Value<string>(),
+        InvoiceId = x["id_invoice_sent"]?.Value<string>(),
+        DateOfPayment = x["date_of"]?.Value<DateTime>() ?? default,
+        Amount = x["amount"]?.Value<decimal>() ?? 0,
+        PaymentMethodId = x["id_payment_method"]?.Value<int>() ?? 0,
+      }).ToList();
+    }
+
     public async Task<string> IssueInvoiceNoFiscalization(string invoiceId, string no="", string docType = "0")
     {
       Thread.CurrentThread.CurrentCulture = new CultureInfo("sl-SI");
@@ -291,7 +458,7 @@ namespace CebelcaAPI
 
     }
 
-    public async Task<string> IssueInvoiceFiscalization(string invoiceId, string idLocation, string opTaxId, string opName, string invoiceNo = "", bool test_mode = false)
+    public async Task<string> IssueInvoiceFiscalization(string invoiceId, string idLocation, string opTaxId, string opName, string invoiceNo = "", bool test_mode = false, string docType = "0")
     {
       Thread.CurrentThread.CurrentCulture = new CultureInfo("sl-SI");
       var values = new Dictionary<string, string>
@@ -303,7 +470,8 @@ namespace CebelcaAPI
                 { "op-name", opName },
                 { "fiscalize", "1" },
                 { "test_mode", test_mode ? "1" : "0" },
-                 { "title", invoiceNo},
+                { "title", invoiceNo},
+                { "doctype", docType },
 
             };
       var ret = await APICall("invoice-sent", "finalize-invoice", values);
@@ -317,7 +485,53 @@ namespace CebelcaAPI
 
     }
 
-    public async Task<string> AddPartner(string name, string email, string street, string city, 
+    private static DateTime SafeParseDate(JToken token, string fieldName)
+    {
+      var raw = token[fieldName]?.Value<string>();
+      if (string.IsNullOrWhiteSpace(raw)) return default;
+      return DateTime.TryParse(raw, out var result) ? result : default;
+    }
+
+    public async Task<IEnumerable<CebInvoice>> GetAllInvoices()
+    {
+      Thread.CurrentThread.CurrentCulture = new CultureInfo("sl-SI");
+      var all = new List<CebInvoice>();
+      for (int page = 0; page < 1000; page++)
+      {
+        var values = new Dictionary<string, string>
+        {
+          { "filter", "all" },
+          { "company", "0" },
+          { "page", page.ToString() },
+          { "doctype", "-999" },
+          { "datefrom", "" },
+          { "dateto", "" },
+        };
+        var ret = await APICall("invoice-sent", "select-all-by", values);
+        var json = JArray.Parse(ret);
+        if (!json.Any() || !json[0].Any())
+          break;
+        var retname = (json[0][0] as JObject).Properties().First().Name;
+        if (retname != "id")
+          throw new Exception("Error from api: " + ret);
+        var batch = json[0].Select(x => new CebInvoice
+        {
+          id = x["id"]?.Value<string>(),
+          title = x["title"]?.Value<string>(),
+          date_served = SafeParseDate(x, "date_served"),
+          date_sent = SafeParseDate(x, "date_sent"),
+          date_to_pay = SafeParseDate(x, "date_to_pay"),
+          amount = x["amount"]?.ToObject<decimal?>() ?? 0,
+          id_partner = x["id_partner"]?.Value<string>(),
+        }).ToList();
+        if (batch.Count == 0)
+          break;
+        all.AddRange(batch);
+      }
+      return all;
+    }
+
+    public async Task<string> AddPartner(string name, string email, string street, string city,
       string postal)
     {
       Thread.CurrentThread.CurrentCulture = new CultureInfo("sl-SI");
