@@ -86,6 +86,7 @@ namespace CebelcaAPI
     Task<string> IssueInvoiceNoFiscalization(string invoiceId, string no = "", string docType = "0");
     Task<string> IssueInvoiceFiscalization(string invoiceId, string idLocation, string opTaxId, string opName, string invoiceNo = "", bool test_mode = false, string docType = "0");
     Task<string> AddPartner(string name, string email, string street, string city, string postal);
+    Task UpdatePartner(string id, string name, string email, string street, string city, string postal, string taxNo = "");
     Task<IEnumerable<CebInvoice>> GetAllInvoices();
   }
 
@@ -554,6 +555,103 @@ namespace CebelcaAPI
       var id = json[0][0]["id"].Value<string>();
       return id;
 
+    }
+
+    public async Task UpdatePartner(string id, string name, string email, string street, string city, string postal, string taxNo = "")
+    {
+      Thread.CurrentThread.CurrentCulture = new CultureInfo("sl-SI");
+      var existingPartner = await GetPartnerForUpdate(id);
+      var resolvedPostal = postal ?? GetPartnerUpdateValue(existingPartner, "postal");
+      var resolvedCity = NormalizeCity(city, ref resolvedPostal);
+      var hasTaxNo = !string.IsNullOrWhiteSpace(taxNo);
+      var values = new Dictionary<string, string>
+            {
+                { "id", id },
+                { "name", name ?? string.Empty },
+                { "street", street ?? string.Empty },
+                { "city", resolvedCity },
+                { "postal", resolvedPostal },
+                { "custaddr", GetPartnerUpdateValue(existingPartner, "custaddr") },
+                { "country", GetPartnerUpdateValue(existingPartner, "country") },
+                { "vatbound", hasTaxNo ? "1" : "0" },
+                { "vatid", taxNo ?? string.Empty },
+                { "payment_period", GetPartnerUpdateValue(existingPartner, "payment_period") },
+                { "bankacc", GetPartnerUpdateValue(existingPartner, "bankacc") },
+                { "bic_bei", GetPartnerUpdateValue(existingPartner, "bic_bei") },
+                { "reg_num", GetPartnerUpdateValue(existingPartner, "reg_num") },
+                { "internal_id", GetPartnerUpdateValue(existingPartner, "internal_id") },
+                { "phone", GetPartnerUpdateValue(existingPartner, "phone") },
+                { "email", email ?? string.Empty },
+                { "website", GetPartnerUpdateValue(existingPartner, "website") },
+                { "notes", GetPartnerUpdateValue(existingPartner, "notes") },
+                { "disabled", GetPartnerUpdateValue(existingPartner, "disabled") },
+                { "disct", GetPartnerUpdateValue(existingPartner, "disct") },
+                { "lang", GetPartnerUpdateValue(existingPartner, "lang") },
+                { "pdfpwd", GetPartnerUpdateValue(existingPartner, "pdfpwd") },
+                { "id_pricelist", GetPartnerUpdateValue(existingPartner, "id_pricelist") },
+                { "external_id", GetPartnerUpdateValue(existingPartner, "external_id") },
+                { "filter", "all" },
+                { "page", "0" },
+                { "f", "all" },
+            };
+      var ret = await APICall("partner", "update-new", values, "select-all-safe");
+      if (string.IsNullOrWhiteSpace(ret))
+        throw new Exception("Cebelca API returned empty response for UpdatePartner");
+      var json = JArray.Parse(ret);
+      if (!json.Any() || !json[0].Any())
+        throw new Exception("Error from api (no data): " + ret);
+      var retname = (json[0][0] as JObject).Properties().First().Name;
+      if (retname != "id")
+        throw new Exception("Error from api: " + ret);
+    }
+
+    private async Task<JToken> GetPartnerForUpdate(string id)
+    {
+      var ret = await APICall("partner", "select-all", new Dictionary<string, string>());
+      var json = JArray.Parse(ret);
+      if (!json.Any() || !json[0].Any())
+        throw new Exception("Error from api (no data): " + ret);
+
+      var partner = json[0].FirstOrDefault(x => string.Equals(GetOptionalString(x, "id"), id, StringComparison.Ordinal));
+      if (partner == null)
+        throw new Exception($"Error from api: partner '{id}' was not found");
+
+      return partner;
+    }
+
+    private static string GetPartnerUpdateValue(JToken partner, string fieldName)
+    {
+      var value = partner[fieldName];
+      if (value == null)
+        throw new Exception($"Error from api: partner response is missing '{fieldName}' field");
+
+      return value.Type == JTokenType.Null ? string.Empty : value.Value<string>() ?? string.Empty;
+    }
+
+    private static string NormalizeCity(string city, ref string postal)
+    {
+      var normalizedCity = city?.Trim() ?? string.Empty;
+      var normalizedPostal = postal?.Trim() ?? string.Empty;
+      var separatorIndex = normalizedCity.IndexOf(' ');
+
+      if (separatorIndex > 0)
+      {
+        var prefix = normalizedCity.Substring(0, separatorIndex);
+        if (prefix.Length == 4 && prefix.All(char.IsDigit))
+        {
+          postal = prefix;
+          return normalizedCity.Substring(separatorIndex + 1).TrimStart();
+        }
+      }
+
+      if (!string.IsNullOrWhiteSpace(normalizedPostal) &&
+          normalizedCity.StartsWith(normalizedPostal + " ", StringComparison.OrdinalIgnoreCase))
+      {
+        normalizedCity = normalizedCity.Substring(normalizedPostal.Length + 1).TrimStart();
+      }
+
+      postal = normalizedPostal;
+      return normalizedCity;
     }
 
   }
