@@ -622,10 +622,7 @@ namespace CebelcaAPI
     private static string GetPartnerUpdateValue(JToken partner, string fieldName)
     {
       var value = partner[fieldName];
-      if (value == null)
-        throw new Exception($"Error from api: partner response is missing '{fieldName}' field");
-
-      return value.Type == JTokenType.Null ? string.Empty : value.Value<string>() ?? string.Empty;
+      return value == null || value.Type == JTokenType.Null ? string.Empty : value.Value<string>() ?? string.Empty;
     }
 
     private static string NormalizeCity(string city, ref string postal)
