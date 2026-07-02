@@ -11,6 +11,8 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
+[assembly: InternalsVisibleTo("robRezCoreTests")]
+
 namespace CebelcaAPI
 {
   public class CebelcaPartner
@@ -71,13 +73,13 @@ namespace CebelcaAPI
 
   public interface ICebelcaAPISharp
   {
-    Task<byte[]> GetPDF(string id);
+    Task<byte[]> GetPDF(string id, string lang = "si", string doctitle = "Račun št.");
     Task<string> AddInvoiceHead(string partnerId, string idDocumentExt, DateTime dateSent, DateTime dateServed, DateTime dateToPay, bool paid = false, string docType = "0");
     Task<string> GetNextInvoiceNo();
     Task<CebInvoice> GetInvoice(int id);
     Task<IEnumerable<CebelcaPartner>> GetPartners();
     Task<IEnumerable<CebelcaSalesLocation>> GetSalesLocations();
-    Task SendInvoiceByEmail(string invoiceId, string to, string subject, string content);
+    Task SendInvoiceByEmail(string invoiceId, string to, string subject, string content, string lang = "si", string doctitle = "Račun št.");
     Task<string> AddInvoiceLine(string invoiceId, string title, string measuringUnit, string qty, decimal price, string vat, string discount);
     Task<IEnumerable<CebelcaInvoiceLine>> GetInvoiceLines(string invoiceId);
     Task UpdateInvoiceLine(string lineId, string invoiceId, string title, string measuringUnit, string qty, decimal price, string vat, string discount, string taxType = "EXM", string konto = "");
@@ -85,8 +87,8 @@ namespace CebelcaAPI
     Task<IEnumerable<CebelcaPayment>> GetPayments(string invoiceId);
     Task<string> IssueInvoiceNoFiscalization(string invoiceId, string no = "", string docType = "0");
     Task<string> IssueInvoiceFiscalization(string invoiceId, string idLocation, string opTaxId, string opName, string invoiceNo = "", bool test_mode = false, string docType = "0");
-    Task<string> AddPartner(string name, string email, string street, string city, string postal);
-    Task UpdatePartner(string id, string name, string email, string street, string city, string postal, string taxNo = "");
+    Task<string> AddPartner(string name, string email, string street, string city, string postal, string country = null, string lang = null, string notes = null);
+    Task UpdatePartner(string id, string name, string email, string street, string city, string postal, string taxNo = "", string country = null, string lang = null, string notes = null);
     Task<IEnumerable<CebInvoice>> GetAllInvoices();
   }
 
@@ -140,13 +142,23 @@ namespace CebelcaAPI
       }
     }
 
-    public async Task<byte[]> GetPDF(string id)
+    /// <summary>
+    /// Builds the Cebelca PDF-download URL. Pure/testable — default args ("si"/"Račun št.")
+    /// reproduce the pre-T14 hardcoded URL byte-for-byte; UK callers pass ("en","Invoice no.").
+    /// </summary>
+    internal static string BuildPdfUrl(string id, string lang, string doctitle)
+    {
+      var encodedTitle = Uri.EscapeDataString(doctitle);
+      return $"https://www.cebelca.biz/API-pdf?id={id}&format=pdf&doctitle={encodedTitle}&lang={lang}&res=invoice-sent";
+    }
+
+    public async Task<byte[]> GetPDF(string id, string lang = "si", string doctitle = "Račun št.")
     {
       using (var client = new HttpClient())
       {
         var byteArray = Encoding.ASCII.GetBytes($"{_key}:x");
         client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", Convert.ToBase64String(byteArray));
-        var url = $"https://www.cebelca.biz/API-pdf?id={id}&format=pdf&doctitle=Ra%C4%8Dun%20%C5%A1t.&lang=si&res=invoice-sent";
+        var url = BuildPdfUrl(id, lang, doctitle);
         var response = await client.GetAsync(url);
         if (response.IsSuccessStatusCode)
         {
@@ -293,20 +305,31 @@ namespace CebelcaAPI
         return l;
     }
 
-    public async Task SendInvoiceByEmail(string invoiceId, string to, string subject, string content)
+    /// <summary>
+    /// Builds the outgoing values for SendInvoiceByEmail. Pure/testable — default args
+    /// ("si"/"Račun št.") reproduce the pre-T14 hardcoded dict byte-for-byte; UK callers pass
+    /// ("en","Invoice no.").
+    /// </summary>
+    internal static Dictionary<string, string> BuildSendInvoiceByEmailValues(
+      string invoiceId, string to, string subject, string content, string lang, string doctitle)
     {
-      Thread.CurrentThread.CurrentCulture = new CultureInfo("sl-SI");
-      var values = new Dictionary<string, string>
+      return new Dictionary<string, string>
             {
                 { "id_invoice_sent", invoiceId},
                 { "mto", to},
                 { "msubj", subject },
                 { "docformat", "pdf"},
-                { "doctitle", "Račun št."},
-                { "lang", "si"},
+                { "doctitle", doctitle},
+                { "lang", lang},
                 { "content", content},
                 { "format", "pdf"}
             };
+    }
+
+    public async Task SendInvoiceByEmail(string invoiceId, string to, string subject, string content, string lang = "si", string doctitle = "Račun št.")
+    {
+      Thread.CurrentThread.CurrentCulture = new CultureInfo("sl-SI");
+      var values = BuildSendInvoiceByEmailValues(invoiceId, to, subject, content, lang, doctitle);
       var ret = await APICall("mailer", "push-invoice-sent-doc", values);
 
     }
@@ -532,10 +555,16 @@ namespace CebelcaAPI
       return all;
     }
 
-    public async Task<string> AddPartner(string name, string email, string street, string city,
-      string postal)
+    /// <summary>
+    /// Builds the outgoing values for AddPartner. Pure/testable — when <paramref name="country"/>/
+    /// <paramref name="lang"/>/<paramref name="notes"/> are null or empty the corresponding key is
+    /// OMITTED, reproducing the pre-T14 dict byte-for-byte (SI-safety default). Non-empty values
+    /// add the key (UK callers pass "GB"/"en"/the reverse-charge note).
+    /// </summary>
+    internal static Dictionary<string, string> BuildAddPartnerValues(
+      string name, string email, string street, string city, string postal,
+      string country, string lang, string notes)
     {
-      Thread.CurrentThread.CurrentCulture = new CultureInfo("sl-SI");
       var values = new Dictionary<string, string>
             {
 
@@ -544,9 +573,23 @@ namespace CebelcaAPI
                 { "street", street },
                 { "city", city },
                 { "postal", postal },
-                
+
 
             };
+      if (!string.IsNullOrEmpty(country))
+        values["country"] = country;
+      if (!string.IsNullOrEmpty(lang))
+        values["lang"] = lang;
+      if (!string.IsNullOrEmpty(notes))
+        values["notes"] = notes;
+      return values;
+    }
+
+    public async Task<string> AddPartner(string name, string email, string street, string city,
+      string postal, string country = null, string lang = null, string notes = null)
+    {
+      Thread.CurrentThread.CurrentCulture = new CultureInfo("sl-SI");
+      var values = BuildAddPartnerValues(name, email, street, city, postal, country, lang, notes);
       var ret = await APICall("partner", "assure", values);
       var json = JArray.Parse(ret);
       var retname = (json[0][0] as JObject).Properties().First().Name;
@@ -557,13 +600,23 @@ namespace CebelcaAPI
 
     }
 
-    public async Task UpdatePartner(string id, string name, string email, string street, string city, string postal, string taxNo = "")
+    /// <summary>
+    /// Builds the outgoing values for UpdatePartner. Pure/testable — when an "Override" arg is
+    /// null the corresponding passthrough value is kept (reproducing pre-T14 behaviour
+    /// byte-for-byte); a non-null override REPLACES the passthrough. SI-safety: SI callers pass
+    /// null overrides so existing partners (country/lang/notes) are never touched.
+    /// </summary>
+    internal static Dictionary<string, string> BuildUpdatePartnerValues(
+      string id, string name, string street, string resolvedCity, string resolvedPostal,
+      string custaddr, string countryPassthrough, string countryOverride,
+      bool hasTaxNo, string taxNo,
+      string paymentPeriod, string bankacc, string bicBei, string regNum, string internalId, string phone,
+      string email, string website,
+      string notesPassthrough, string notesOverride,
+      string disabled, string disct,
+      string langPassthrough, string langOverride,
+      string pdfpwd, string idPricelist, string externalId)
     {
-      Thread.CurrentThread.CurrentCulture = new CultureInfo("sl-SI");
-      var existingPartner = await GetPartnerForUpdate(id);
-      var resolvedPostal = postal ?? GetPartnerUpdateValue(existingPartner, "postal");
-      var resolvedCity = NormalizeCity(city, ref resolvedPostal);
-      var hasTaxNo = !string.IsNullOrWhiteSpace(taxNo);
       var values = new Dictionary<string, string>
             {
                 { "id", id },
@@ -571,29 +624,57 @@ namespace CebelcaAPI
                 { "street", street ?? string.Empty },
                 { "city", resolvedCity },
                 { "postal", resolvedPostal },
-                { "custaddr", GetPartnerUpdateValue(existingPartner, "custaddr") },
-                { "country", GetPartnerUpdateValue(existingPartner, "country") },
+                { "custaddr", custaddr },
+                { "country", countryOverride ?? countryPassthrough },
                 { "vatbound", hasTaxNo ? "1" : "0" },
                 { "vatid", taxNo ?? string.Empty },
-                { "payment_period", GetPartnerUpdateValue(existingPartner, "payment_period") },
-                { "bankacc", GetPartnerUpdateValue(existingPartner, "bankacc") },
-                { "bic_bei", GetPartnerUpdateValue(existingPartner, "bic_bei") },
-                { "reg_num", GetPartnerUpdateValue(existingPartner, "reg_num") },
-                { "internal_id", GetPartnerUpdateValue(existingPartner, "internal_id") },
-                { "phone", GetPartnerUpdateValue(existingPartner, "phone") },
+                { "payment_period", paymentPeriod },
+                { "bankacc", bankacc },
+                { "bic_bei", bicBei },
+                { "reg_num", regNum },
+                { "internal_id", internalId },
+                { "phone", phone },
                 { "email", email ?? string.Empty },
-                { "website", GetPartnerUpdateValue(existingPartner, "website") },
-                { "notes", GetPartnerUpdateValue(existingPartner, "notes") },
-                { "disabled", GetPartnerUpdateValue(existingPartner, "disabled") },
-                { "disct", GetPartnerUpdateValue(existingPartner, "disct") },
-                { "lang", GetPartnerUpdateValue(existingPartner, "lang") },
-                { "pdfpwd", GetPartnerUpdateValue(existingPartner, "pdfpwd") },
-                { "id_pricelist", GetPartnerUpdateValue(existingPartner, "id_pricelist") },
-                { "external_id", GetPartnerUpdateValue(existingPartner, "external_id") },
+                { "website", website },
+                { "notes", notesOverride ?? notesPassthrough },
+                { "disabled", disabled },
+                { "disct", disct },
+                { "lang", langOverride ?? langPassthrough },
+                { "pdfpwd", pdfpwd },
+                { "id_pricelist", idPricelist },
+                { "external_id", externalId },
                 { "filter", "all" },
                 { "page", "0" },
                 { "f", "all" },
             };
+      return values;
+    }
+
+    public async Task UpdatePartner(string id, string name, string email, string street, string city, string postal, string taxNo = "", string country = null, string lang = null, string notes = null)
+    {
+      Thread.CurrentThread.CurrentCulture = new CultureInfo("sl-SI");
+      var existingPartner = await GetPartnerForUpdate(id);
+      var resolvedPostal = postal ?? GetPartnerUpdateValue(existingPartner, "postal");
+      var resolvedCity = NormalizeCity(city, ref resolvedPostal);
+      var hasTaxNo = !string.IsNullOrWhiteSpace(taxNo);
+      var values = BuildUpdatePartnerValues(
+        id, name, street, resolvedCity, resolvedPostal,
+        GetPartnerUpdateValue(existingPartner, "custaddr"), GetPartnerUpdateValue(existingPartner, "country"), country,
+        hasTaxNo, taxNo,
+        GetPartnerUpdateValue(existingPartner, "payment_period"),
+        GetPartnerUpdateValue(existingPartner, "bankacc"),
+        GetPartnerUpdateValue(existingPartner, "bic_bei"),
+        GetPartnerUpdateValue(existingPartner, "reg_num"),
+        GetPartnerUpdateValue(existingPartner, "internal_id"),
+        GetPartnerUpdateValue(existingPartner, "phone"),
+        email, GetPartnerUpdateValue(existingPartner, "website"),
+        GetPartnerUpdateValue(existingPartner, "notes"), notes,
+        GetPartnerUpdateValue(existingPartner, "disabled"),
+        GetPartnerUpdateValue(existingPartner, "disct"),
+        GetPartnerUpdateValue(existingPartner, "lang"), lang,
+        GetPartnerUpdateValue(existingPartner, "pdfpwd"),
+        GetPartnerUpdateValue(existingPartner, "id_pricelist"),
+        GetPartnerUpdateValue(existingPartner, "external_id"));
       var ret = await APICall("partner", "update-new", values, "select-all-safe");
       if (string.IsNullOrWhiteSpace(ret))
         throw new Exception("Cebelca API returned empty response for UpdatePartner");
