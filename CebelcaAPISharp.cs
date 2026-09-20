@@ -57,6 +57,44 @@ namespace CebelcaAPI
     public DateTime date_to_pay { get; set; }
     public decimal amount { get; set; }
     public string id_partner { get; set; }
+    public IDictionary<string, object> fields { get; set; } = new Dictionary<string, object>();
+
+    public static CebInvoice FromCebelcaJson(JToken invoice)
+    {
+      var knownFields = new HashSet<string>(StringComparer.Ordinal)
+      {
+        "id", "title", "date_served", "date_sent", "date_to_pay", "amount", "id_partner"
+      };
+
+      return new CebInvoice
+      {
+        id = invoice["id"]?.Value<string>(),
+        title = invoice["title"]?.Value<string>(),
+        date_served = ParseDate(invoice["date_served"]),
+        date_sent = ParseDate(invoice["date_sent"]),
+        date_to_pay = ParseDate(invoice["date_to_pay"]),
+        amount = invoice["amount"]?.ToObject<decimal?>() ?? 0,
+        id_partner = invoice["id_partner"]?.Value<string>(),
+        fields = invoice.Children<JProperty>()
+          .Where(property => !knownFields.Contains(property.Name))
+          .ToDictionary(property => property.Name, property => ToPlainValue(property.Value))
+      };
+    }
+
+    private static DateTime ParseDate(JToken token)
+    {
+      var raw = token?.Value<string>();
+      return DateTime.TryParse(raw, out var result) ? result : default;
+    }
+
+    private static object ToPlainValue(JToken token)
+    {
+      if (token.Type == JTokenType.Null) return null;
+      if (token.Type == JTokenType.Array) return token.Select(ToPlainValue).ToList();
+      if (token.Type == JTokenType.Object) return token.Children<JProperty>()
+        .ToDictionary(property => property.Name, property => ToPlainValue(property.Value));
+      return ((JValue)token).Value;
+    }
   }
 
   public class CebelcaPayment
@@ -221,10 +259,7 @@ namespace CebelcaAPI
       var retname = (json[0][0] as JObject).Properties().First().Name;
       if (retname != "id")
         throw new Exception("Error from api: " + ret);
-      var inv = json[0].ToObject<CebInvoice[]>();
-      return inv[0];
-      //var id = json[0][0]["proposed_title"].Value<string>();
-      //return id;
+      return CebInvoice.FromCebelcaJson(json[0][0]);
 
     }
 
@@ -486,13 +521,6 @@ namespace CebelcaAPI
 
     }
 
-    private static DateTime SafeParseDate(JToken token, string fieldName)
-    {
-      var raw = token[fieldName]?.Value<string>();
-      if (string.IsNullOrWhiteSpace(raw)) return default;
-      return DateTime.TryParse(raw, out var result) ? result : default;
-    }
-
     public async Task<IEnumerable<CebInvoice>> GetAllInvoices()
     {
       Thread.CurrentThread.CurrentCulture = new CultureInfo("sl-SI");
@@ -515,16 +543,7 @@ namespace CebelcaAPI
         var retname = (json[0][0] as JObject).Properties().First().Name;
         if (retname != "id")
           throw new Exception("Error from api: " + ret);
-        var batch = json[0].Select(x => new CebInvoice
-        {
-          id = x["id"]?.Value<string>(),
-          title = x["title"]?.Value<string>(),
-          date_served = SafeParseDate(x, "date_served"),
-          date_sent = SafeParseDate(x, "date_sent"),
-          date_to_pay = SafeParseDate(x, "date_to_pay"),
-          amount = x["amount"]?.ToObject<decimal?>() ?? 0,
-          id_partner = x["id_partner"]?.Value<string>(),
-        }).ToList();
+        var batch = json[0].Select(CebInvoice.FromCebelcaJson).ToList();
         if (batch.Count == 0)
           break;
         all.AddRange(batch);

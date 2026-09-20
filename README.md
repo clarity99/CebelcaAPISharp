@@ -228,3 +228,41 @@ Main methods exposed by `ICebelcaAPISharp`:
 - The library currently creates its own `HttpClient` per request.
 - Some numeric and date values are formatted with Slovenian culture conventions because the upstream API expects them.
 - The package targets `netstandard2.0`.
+
+## MCP Server
+
+The optional `CebelcaAPI.Mcp` executable exposes the full `ICebelcaAPISharp` API through the official C# MCP SDK. It supports stdio by default and Streamable HTTP at `/mcp`. The API key is read from `CEBELCA_API_KEY`; the client uses its default null logger so invoice and partner payloads are not written to logs.
+
+Build once, then configure an MCP client to launch the compiled DLL. This keeps build output out of the stdio protocol stream. .NET 10 is required.
+
+```bash
+dotnet build CebelcaAPI.Mcp/CebelcaAPI.Mcp.csproj -c Release
+```
+
+Example MCP client configuration (replace the absolute DLL path and API key):
+
+```json
+{
+  "command": "dotnet",
+  "args": ["/absolute/path/CebelcaAPI.Mcp/bin/Release/net10.0/CebelcaAPI.Mcp.dll"],
+  "env": { "CEBELCA_API_KEY": "your-cebelca-key" }
+}
+```
+
+Run HTTP on loopback. HTTP requires a separate bearer token and rejects non-loopback bind URLs, non-loopback Host/Origin values, and requests without the token:
+
+```bash
+export CEBELCA_API_KEY="your-cebelca-key"
+export CEBELCA_MCP_TOKEN="a-long-random-local-token"
+dotnet run --project CebelcaAPI.Mcp/CebelcaAPI.Mcp.csproj -- --transport http --url http://127.0.0.1:3001
+```
+
+Configure an MCP client to connect to `http://127.0.0.1:3001/mcp` with `Authorization: Bearer <CEBELCA_MCP_TOKEN>`. HTTP listens on loopback only; remote access should go through a separately secured tunnel or proxy.
+
+The exposed tool names are `get_partners`, `get_sales_locations`, `get_next_invoice_number`, `get_all_invoices`, `get_invoice`, `get_invoice_lines`, `get_payments`, `get_invoice_pdf`, `add_partner`, `update_partner`, `add_invoice_head`, `add_invoice_line`, `update_invoice_line`, `issue_invoice_no_fiscalization`, `issue_invoice_fiscalization`, `add_payment`, and `send_invoice_by_email`. `get_invoice` keeps its standard typed properties and also returns every additional property sent by Cebelca in `fields`, including nested objects and arrays. For fiscalized invoices, `get_invoice` and `get_all_invoices` return `title` as `locreg-docnum`; non-fiscalized invoices retain Cebelca's original title. Invoice, partner, and line IDs must be positive numeric IDs. Invoice dates are ISO 8601 dates; line quantity, VAT, and discount are strings in the format expected by Cebelca. Invoice issue/fiscalization, payment, email, and creation actions are marked as writes; fiscalization is marked destructive and non-idempotent. PDF downloads return an embedded `application/pdf` resource and do not write files.
+
+The focused tool checks run with:
+
+```bash
+dotnet test CebelcaAPI.Mcp.Tests/CebelcaAPI.Mcp.Tests.csproj
+```
