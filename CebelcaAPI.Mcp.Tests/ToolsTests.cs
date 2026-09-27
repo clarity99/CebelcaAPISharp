@@ -12,6 +12,62 @@ using Xunit;
 public class ToolsTests
 {
     [Fact]
+    public async Task CliAcceptsPlainInvoiceIdAndNamedPaymentOptions()
+    {
+        var proxy = DispatchProxy.Create<ICebelcaAPISharp, FakeApi>();
+        var fake = (FakeApi)(object)proxy;
+        fake.Result = new CebInvoice { id = "258", title = "26-0258" };
+
+        var (command, document, output) = CliArguments.Parse(["invoice", "258"]);
+        using (document)
+        {
+            var invoice = await CebelcaCli.Execute(proxy, command, document.RootElement);
+            Assert.Equal("258", ((CebInvoice)invoice).id);
+            Assert.Equal("GetInvoice", fake.Method);
+            Assert.Equal(258, fake.Arguments![0]);
+            Assert.Null(output);
+        }
+
+        fake.Result = "payment-7";
+        var parsed = CliArguments.Parse(["add-payment", "--invoice-id", "42", "--date-of-payment", "2026-09-20", "--amount", "12.5", "--payment-method-id", "1"]);
+        using (parsed.Arguments)
+        {
+            await CebelcaCli.Execute(proxy, parsed.Command, parsed.Arguments.RootElement);
+            Assert.Equal(new object?[] { "42", new DateTime(2026, 9, 20), 12.5m, "1" }, fake.Arguments);
+        }
+
+        Assert.Throws<ArgumentException>(() => CliArguments.Parse(["invoice", "not-an-id"]));
+        Assert.Throws<ArgumentException>(() => CliArguments.Parse(["add-payment", "--amount", "not-a-number"]));
+        Assert.Throws<ArgumentException>(() => CliArguments.Parse(["add-payment", "--amount", "12,5"]));
+        Assert.Contains("--amount VALUE", CliArguments.HelpFor("add-payment"));
+    }
+
+    [Fact]
+    public async Task CliMirrorsMcpCommandsAndFiscalizedInvoiceTitles()
+    {
+        Assert.Equal(17, CebelcaCli.Commands.Distinct().Count());
+        Assert.Contains("get_invoice", CebelcaCli.Commands);
+        Assert.Contains("send_invoice_by_email", CebelcaCli.Commands);
+
+        var proxy = DispatchProxy.Create<ICebelcaAPISharp, FakeApi>();
+        var fake = (FakeApi)(object)proxy;
+        fake.Result = new CebInvoice
+        {
+            title = "",
+            fields = new Dictionary<string, object> { ["fiscalized"] = 1, ["locreg"] = "E1-E1", ["docnum"] = 12 }
+        };
+        using var invoiceArguments = JsonDocument.Parse("{\"invoiceId\":258}");
+        var invoice = await CebelcaCli.Execute(proxy, "get_invoice", invoiceArguments.RootElement);
+        Assert.Contains("E1-E1-12", JsonSerializer.Serialize(invoice));
+
+        fake.Result = "payment-7";
+        using var paymentArguments = JsonDocument.Parse("{\"invoiceId\":\"42\",\"dateOfPayment\":\"2026-09-20\",\"amount\":12.5,\"paymentMethodId\":\"1\"}");
+        var payment = await CebelcaCli.Execute(proxy, "add_payment", paymentArguments.RootElement);
+        Assert.Contains("payment-7", JsonSerializer.Serialize(payment));
+        Assert.Equal(new object?[] { "42", new DateTime(2026, 9, 20), 12.5m, "1" }, fake.Arguments);
+    }
+
+    [Fact]
     public void CebInvoicePreservesUnknownCebelcaFields()
     {
         var invoice = CebInvoice.FromCebelcaJson(JToken.Parse("{\"id\":\"42\",\"title\":\"26-0042\",\"payment\":\"paid\",\"eor\":\"ABC123\",\"metadata\":{\"source\":\"api\"}}"));

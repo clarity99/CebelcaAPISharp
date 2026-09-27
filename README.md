@@ -266,3 +266,17 @@ The focused tool checks run with:
 ```bash
 dotnet test CebelcaAPI.Mcp.Tests/CebelcaAPI.Mcp.Tests.csproj
 ```
+
+## CLI
+
+`CebelcaAPI.Cli` mirrors the MCP server's 17 operations with plain commands and named options. It writes JSON to standard output. The installed launcher uses `CEBELCA_API_KEY` from the environment, or the existing `bws-touchid` helper when the variable is absent.
+
+```bash
+cebelca-cli invoice 258
+cebelca-cli invoice-lines 258
+cebelca-cli invoices
+cebelca-cli add-payment --invoice-id 258 --date-of-payment 2026-09-20 --amount 80 --payment-method-id 1
+cebelca-cli invoice-pdf 258 --output invoice.pdf
+```
+
+Run `cebelca-cli --help` for the full command list. The older JSON input form remains available for scripts. It follows the MCP output rules: it keeps full Cebelca invoice data in `fields` and uses `locreg-docnum` for the `title` of a fiscalized invoice.

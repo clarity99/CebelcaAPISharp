@@ -215,6 +215,12 @@
           "xunit.extensibility.core": "[2.9.3]"
         }
       },
+      "cebelcaapi.cli": {
+        "type": "Project",
+        "dependencies": {
+          "CebelcaAPISharp": "[1.0.9, )"
+        }
+      },
       "cebelcaapi.mcp": {
         "type": "Project",
         "dependencies": {

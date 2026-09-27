@@ -1,0 +1,20 @@
+#!/usr/bin/env python3
+"""Launch the installed CLI with the same Touch ID helper as the MCP server."""
+
+import os
+import shutil
+import sys
+from pathlib import Path
+
+runtime = shutil.which("dotnet")
+if runtime is None:
+    raise SystemExit("dotnet is required to run cebelca-cli.")
+
+assembly = Path.home() / ".local" / "share" / "cebelca-cli" / "CebelcaAPI.Cli.dll"
+touch_id = Path.home() / ".local" / "bin" / "bws-touchid"
+needs_key = bool(sys.argv[1:]) and sys.argv[1] not in ("--help", "-h", "help")
+needs_key = needs_key and not (len(sys.argv) > 2 and sys.argv[2] in ("--help", "-h"))
+if needs_key and not os.environ.get("CEBELCA_API_KEY") and touch_id.is_file():
+    os.execv(touch_id, [str(touch_id), "run", "--", runtime, str(assembly), *sys.argv[1:]])
+
+os.execv(runtime, [runtime, str(assembly), *sys.argv[1:]])

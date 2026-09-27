@@ -19,7 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Remove="CebelcaAPI.Mcp/**/*.cs;CebelcaAPI.Mcp.Tests/**/*.cs" />
+    <Compile Remove="CebelcaAPI.Cli/**/*.cs;CebelcaAPI.Mcp/**/*.cs;CebelcaAPI.Mcp.Tests/**/*.cs" />
   </ItemGroup>
 
 </Project>
